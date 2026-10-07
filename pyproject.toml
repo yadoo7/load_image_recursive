@@ -1,6 +1,6 @@
 [project]
 name = "load_image_recursive"
-version = "1.0.0"
+version = "1.0.1"
 description = "Load Image that lists sub-directories of ComfyUI/input, with a folder dropdown and working thumbnails."
 license = { file = "LICENSE" }
 readme = "README.md"
