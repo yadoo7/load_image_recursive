@@ -7,11 +7,7 @@ filter the list, and — unlike anything else in the ecosystem — makes the
 
 > 中文说明见 [下方](#中文说明)。
 
-<!--
-  截图占位。把图存成 docs/screenshot.png 之后，删掉下面这行的注释符号即可：
-
-  ![Load Image (Recursive)](docs/screenshot.png)
--->
+![Load Image (Recursive): the folder dropdown filters the image list, and sub-directory thumbnails render](docs/screenshot.png)
 
 ---
 
