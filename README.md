@@ -58,7 +58,7 @@ path-safety checks. Outputs are identical (`IMAGE`, `MASK`, `STRING`).
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/CHANGE_ME/load_image_recursive.git
+git clone https://github.com/yadoo7/load_image_recursive.git
 ```
 
 Restart ComfyUI. No dependencies, no patch scripts, nothing to configure.
@@ -246,7 +246,7 @@ node in the ecosystem does the same thing.
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/CHANGE_ME/load_image_recursive.git
+git clone https://github.com/yadoo7/load_image_recursive.git
 ```
 
 重启 ComfyUI 即可。无依赖、无补丁脚本、无需配置。

@@ -21,10 +21,10 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/CHANGE_ME/load_image_recursive"
-"Bug Tracker" = "https://github.com/CHANGE_ME/load_image_recursive/issues"
+Repository = "https://github.com/yadoo7/load_image_recursive"
+"Bug Tracker" = "https://github.com/yadoo7/load_image_recursive/issues"
 
 [tool.comfy]
-PublisherId = "CHANGE_ME"
+PublisherId = "yadoo7"
 DisplayName = "Load Image (Recursive)"
 Icon = ""
