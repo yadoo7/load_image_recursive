@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# 补丁脚本留下的备份（前端产物 / server.py 的原件）
+*.bak-thumb
+*.bak-*
+!*.bak-*.keep
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本地测试产物
+*.log

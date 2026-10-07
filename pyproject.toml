@@ -1,0 +1,30 @@
+[project]
+name = "load_image_recursive"
+version = "1.0.0"
+description = "Load Image that lists sub-directories of ComfyUI/input, with a folder dropdown and working thumbnails."
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+keywords = [
+    "comfyui",
+    "comfyui-node",
+    "load-image",
+    "subfolder",
+    "recursive",
+    "thumbnail",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/CHANGE_ME/load_image_recursive"
+"Bug Tracker" = "https://github.com/CHANGE_ME/load_image_recursive/issues"
+
+[tool.comfy]
+PublisherId = "CHANGE_ME"
+DisplayName = "Load Image (Recursive)"
+Icon = ""
