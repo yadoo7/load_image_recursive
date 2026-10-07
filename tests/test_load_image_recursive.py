@@ -10,7 +10,6 @@
 重点是 middleware 的分流表 —— 那是整个「零核心改动」方案的命门，
 判据错一条就可能把原生能正常工作的请求弄坏。
 """
-import asyncio
 import importlib.util
 import os
 import sys
