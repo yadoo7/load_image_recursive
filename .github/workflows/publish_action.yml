@@ -31,7 +31,7 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
         run: |
           if [ -z "$REGISTRY_TOKEN" ]; then
-            echo "::error title=Missing secret::REGISTRY_ACCESS_TOKEN is not set. Add it in Settings > Secrets and variables > Actions (value format: cnr_xxxxxxxx)."
+            echo "::error title=Missing secret::REGISTRY_ACCESS_TOKEN is not set. Add it in Settings > Secrets and variables > Actions (value format: pat-xxxxxxxx)."
             exit 1
           fi
           echo "Registry token is present (length ${#REGISTRY_TOKEN})."
