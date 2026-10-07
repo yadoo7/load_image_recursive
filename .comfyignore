@@ -1,0 +1,21 @@
+# Files kept in git but excluded from the Comfy Registry archive.
+# Syntax is the same as .gitignore. Anything not tracked by git is
+# already excluded, so this only lists things we DO commit but don't
+# want to ship to users installing via ComfyUI-Manager.
+
+# Development-only: test suite and its ComfyUI stubs
+tests/
+
+# Development-only: maintenance scripts, not needed at runtime
+tools/
+
+# Byte-compiled leftovers
+__pycache__/
+*.py[cod]
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
