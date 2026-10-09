@@ -341,11 +341,14 @@ class LoadImageRecursive(LoadImage):
 
     CATEGORY = "image"
     # 让中英文关键词都能搜到（原生 LoadImage 的别名一并继承）
+    # "加载图像" 是原生 Load Image 的中文名 —— 一起收进来，
+    # 这样在中文界面里搜「加载图像」也能带出本节点
     SEARCH_ALIASES = [
         "load image", "open image", "import image", "image input",
         "upload image", "read image", "image loader",
         "recursive", "recursive load image", "subfolder", "subdirectory",
         "load image recursive", "load image subfolder", "folder filter",
+        "加载图像", "加载图像 子目录", "图像",
         "子目录", "含子目录", "递归", "递归加载图片", "加载图片 子目录",
         "目录", "文件夹", "目录过滤",
     ]
@@ -379,7 +382,13 @@ class LoadImageRecursive(LoadImage):
 
 WEB_DIRECTORY = "./web"
 NODE_CLASS_MAPPINGS = {"LoadImageRecursive": LoadImageRecursive}
-NODE_DISPLAY_NAME_MAPPINGS = {"LoadImageRecursive": "加载图片(含子目录)"}
+
+# 这里只给**英文原名**。中文名走 locales/zh/nodeDefs.json ——
+# 硬写中文会让英文界面也显示中文，而 ComfyUI 的 /api/i18n 机制会按语言
+# 挑选翻译（前端 i18n.ts 的 customNodesProvide 优先用它）。
+# 中文界面下显示为「加载图像（含子目录）」，跟原生「加载图像」并排，
+# 英文界面下显示 "Load Image (Recursive)"。
+NODE_DISPLAY_NAME_MAPPINGS = {"LoadImageRecursive": "Load Image (Recursive)"}
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
 
 _install_view_middleware()

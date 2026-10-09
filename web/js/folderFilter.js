@@ -5,6 +5,7 @@
  * 这里把两者接起来：
  *
  *   folder 变  → image.options.values 收窄成该目录下的文件
+ *                 若当前选中的图不在新目录里，自动选中第一张，预览跟着切
  *   image  变  → folder 自动跳到这张图所在的目录
  *
  * 另外管一件事：**列表的刷新**。
@@ -91,6 +92,33 @@ app.registerExtension({
           !folder || folder === ALL
             ? all.slice()
             : all.filter((v) => v.startsWith(folder + "/"));
+        app.graph?.setDirtyCanvas(true, true);
+      };
+
+      /**
+       * 切目录之后，把选中的那张图也一起带过去。
+       *
+       * 为什么必须自己动手：画布上那张预览图不是靠 options.values 驱动的，
+       * 而是 image widget 自己的 callback —— 前端在 useImageUploadWidget 里
+       * 给它挂了一个回调，负责 `node.imgs = undefined`、
+       * `nodeOutputStore.setNodeOutputs(node, value)`、再重绘。
+       * 只改候选列表不会触发它，所以预览会一直停在上一张图上。
+       *
+       * 这里的写法（改 value → 调 callback → setDirtyCanvas）跟 ComfyUI 自己
+       * 「程序化改图片值」用的那套一模一样（见 clearDeletedAssetWidgetValues），
+       * 效果等价于用户自己在下拉里点了那张图。
+       */
+      const followFolder = () => {
+        const values = imageWidget.options?.values || [];
+        if (!values.length) return;
+        // 当前这张图还在新列表里就不动它
+        // 典型场景：从某个子目录切回「全部」，原图仍然有效
+        if (values.includes(imageWidget.value)) return;
+
+        const next = values[0];
+        imageWidget.value = next;
+        // 注意：这个回调不读参数，只读 widget.value，所以必须先赋值再调
+        imageWidget.callback?.(next);
         app.graph?.setDirtyCanvas(true, true);
       };
 
@@ -198,6 +226,7 @@ app.registerExtension({
       folderWidget.callback = function (value, ...rest) {
         const result = prevFolderCallback?.apply(this, [value, ...rest]);
         applyFilter();
+        followFolder();
         return result ?? value;
       };
 

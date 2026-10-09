@@ -1,0 +1,17 @@
+{
+  "LoadImageRecursive": {
+    "display_name": "加载图像（含子目录）",
+    "description": "原生「加载图像」的递归版：下拉列出 input 下任意深度的图片，并可按子目录过滤。",
+    "inputs": {
+      "folder": {
+        "name": "目录"
+      },
+      "image": {
+        "name": "图像"
+      },
+      "upload": {
+        "name": "选择文件上传"
+      }
+    }
+  }
+}
