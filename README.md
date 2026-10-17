@@ -2,12 +2,13 @@
 
 A drop-in replacement for ComfyUI's built-in **Load Image** node that also lists
 images from **sub-directories** of `ComfyUI/input`, adds a **folder dropdown** to
-filter the list, and — unlike anything else in the ecosystem — makes the
-**thumbnails actually work** for those sub-directory files.
+filter the list, and — unlike the other subfolder loaders — actually makes those
+sub-directory images **load**: canvas preview, image viewer and mask editor all
+work, instead of being handed a path that can only 404.
 
 > 中文说明见 [下方](#中文说明)。
 
-![Load Image (Recursive): the folder dropdown filters the image list, and sub-directory thumbnails render](docs/screenshot.png)
+![Load Image (Recursive): the folder dropdown filters the image list, and sub-directory images load normally](docs/screenshot.png)
 
 ---
 
@@ -30,9 +31,11 @@ So you end up either dumping everything into one flat folder, or copying files
 out of your library every single time.
 
 There are already a few "load image from subfolder" nodes around. They solve the
-listing problem and then hit a second wall: **the dropdown shows no thumbnail for
-those images.** That's not their fault — it's a gap in ComfyUI's frontend, and
-this node fixes it.
+listing problem and then hit a second wall: **the image never actually loads.**
+ComfyUI resolves a `/view` filename against the `input` root, so a value like
+`scans/2026/roll-01.tif` can only ever 404 — blank canvas preview, blank viewer,
+and nothing for the mask editor to open. That is a gap in ComfyUI's server rather
+than in those nodes, and this node closes it.
 
 ## What it does
 
@@ -40,9 +43,11 @@ this node fixes it.
    relative to `input` (`scans/2026/roll-01.tif`).
 2. **Folder dropdown** — pick a folder and the image list narrows to just that
    folder. Turns a 1200-entry scroll into a 40-entry scroll.
-3. **Working thumbnails** — sub-directory images show real thumbnails, and they
-   are downscaled to 384 px before being sent, so opening the dropdown doesn't
-   download a pile of 38 MB camera files.
+3. **Sub-directory images actually load** — canvas preview, image viewer and mask
+   editor all work for files in subfolders, because the real path is resolved
+   before ComfyUI's `/view` handler sees it. Preview-sized requests are capped at
+   384 px, so browsing a folder does not pull a pile of 38 MB camera files over
+   the wire.
 4. **Bidirectional sync** — pick an image and the folder dropdown jumps to its
    folder; pick a folder and the list filters.
 
@@ -90,10 +95,18 @@ rebuild it, and they all go through the same authoritative `/object_info` call:
 Refreshing **keeps your folder selection** — it only rebuilds the lists. If the
 folder you were on no longer exists, it falls back to `(全部)`.
 
-## How the thumbnails work
+## Why sub-directory images break (and how this fixes it)
 
-Worth reading if you're curious why every other sub-folder loader has broken
-thumbnails.
+Worth reading if you are curious why every other sub-folder loader shows a blank
+preview.
+
+> **A note on dropdown thumbnails.** Up to roughly ComfyUI 1.4x the combo
+> dropdown rendered a thumbnail next to every entry, and that is what this
+> middleware originally targeted. Frontend 1.5x replaced the combo dropdown with
+> a plain text list, so **no node shows thumbnails in the dropdown any more** —
+> including the stock `Load Image`. The underlying path problem is unchanged
+> though: it still breaks the canvas preview, the image viewer and the mask
+> editor, and that is what this node fixes.
 
 ComfyUI's frontend builds combo thumbnail URLs with an internal
 `getMediaUrl(filename, type, kind)` helper, which emits:
@@ -156,6 +169,10 @@ It makes the frontend ask for `max=384` on combo thumbnails; the middleware then
 honours it. This one **does** patch a file outside this folder
 (`comfyui_frontend_package/static/assets/*.js`) and it is reverted by a frontend
 update — hence optional, and with a `--revert`.
+
+> On frontend 1.5x and later the combo dropdown no longer renders thumbnails at
+> all, so this patch has no visible effect there. It only matters on older
+> frontends.
 
 ## Compatibility
 
@@ -235,8 +252,9 @@ node in the ecosystem does the same thing.
 
 1. 递归扫描任意层级，路径相对 `input`（如 `扫描/2026/roll-01.tif`）
 2. 「目录」下拉：选完目录，图片列表只列该目录下的文件
-3. **缩略图真的能显示** —— 子目录图片的缩略图是好的，而且会先压到 384px 再发，
-   打开下拉不会拉一堆几十 MB 的原图
+3. **子目录的图真的能加载** —— 画布预览、图片查看器、遮罩编辑器都能正常打开子目录里的图
+   （请求进来前先把真实路径解析好）。预览类的请求会先压到 384px 再发，
+   翻目录不会拉一堆几十 MB 的原图
 4. 双向联动：选图 → 目录自动跳过去；选目录 → 列表收窄，**并且画布上的预览跟着切到该目录的第一张**
    （原生节点的预览只认自己的 callback，光改候选列表不会刷新，所以这里手动触发了同一套回调）
 
@@ -264,11 +282,15 @@ git clone https://github.com/yadoo7/load_image_recursive.git
 
 刷新**会保留你当前选的目录**，只重建列表；如果那个目录已经不存在了，才退回 `(全部)`。
 
-**为什么别人的子目录加载器没有缩略图**
+**为什么别人的子目录加载器预览是空白**
 
-ComfyUI 前端的 combo 缩略图 URL 由内部函数 `getMediaUrl()` 生成，只拼
-`filename` + `type`：**不带 `subfolder`，也不带 `max`**。于是子目录图片被服务端
-当成根目录文件去找 → 404；根目录的大图则整张原图发下来。
+ComfyUI 前端拼 `/view` 地址时只带 `filename` + `type`：**不带 `subfolder`，也不带 `max`**。
+于是 `扫描/2026/roll-01.tif` 这种值被服务端当成根目录文件去找 → 404。
+画布预览、图片查看器、遮罩编辑器统统打不开。
+
+> **关于缩略图**：ComfyUI 1.4x 前后，下拉里每个条目会渲染一张缩略图，当时的补丁就是冲这个去的。
+> 前端 1.5x 把 combo 下拉改成了纯文字列表，**现在任何节点（包括原生「加载图像」）下拉里都没有缩略图了**。
+> 但同一个路径问题依然会让画布预览、查看器、遮罩编辑器失效，本节点解决的就是这个。
 
 这两点要么改 `server.py` + 前端打包产物（改核心，升级就冲突，没法作为
 custom node 发布），要么在节点里挂一个 aiohttp middleware 在请求进入 handler
