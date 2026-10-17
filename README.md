@@ -50,6 +50,11 @@ than in those nodes, and this node closes it.
    the wire.
 4. **Bidirectional sync** — pick an image and the folder dropdown jumps to its
    folder; pick a folder and the list filters.
+5. **The ◀ ▶ arrows wrap around** — stepping past the last image lands on the
+   first, and stepping back from the first lands on the last. Stock combos go
+   grey and stop at either end. Wrapping never drags the folder dropdown along,
+   so a loop over `(all)` keeps covering every image instead of snapping into
+   whichever subfolder it happens to reach.
 
 Everything else is inherited from the stock node, unchanged: decoding, EXIF
 handling, alpha→mask, the upload button, drag & drop, paste, mask editor,
@@ -257,6 +262,9 @@ node in the ecosystem does the same thing.
    翻目录不会拉一堆几十 MB 的原图
 4. 双向联动：选图 → 目录自动跳过去；选目录 → 列表收窄，**并且画布上的预览跟着切到该目录的第一张**
    （原生节点的预览只认自己的 callback，光改候选列表不会刷新，所以这里手动触发了同一套回调）
+5. **◀ ▶ 箭头首尾相接** —— 最后一张再往右是回到第一张，第一张再往左是跳到最后一张
+   （原生 combo 走到头就变灰、点不动）。而且箭头循环时**不会把目录下拉一起带走**，
+   所以在「(全部)」里一路点下去，是真的把整库绕一圈，而不是半路被吸进某个子目录
 
 解码、EXIF、alpha→mask、上传按钮、拖拽粘贴、遮罩编辑器、路径安全校验
 全部继承原生实现，输出完全一致（`IMAGE` / `MASK` / `STRING`）。

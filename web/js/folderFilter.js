@@ -30,6 +30,62 @@ const ALL = "(全部)";
 const NODE_NAME = "LoadImageRecursive";
 const OBJECT_INFO_URL = "/object_info/" + NODE_NAME;
 
+/**
+ * 让 combo 的 ◀ ▶ 箭头首尾相接。
+ *
+ * 原生 ComboWidget 的规则是「走到头就停」：
+ *
+ *   canIncrement()   -> currentIndex !== values.length - 1
+ *   incrementValue() -> clamp(currentIndex + 1, 0, values.length - 1)
+ *
+ * 所以停在最后一张时右箭头会变灰、点了没反应，只能一路反向绕回去。
+ *
+ * 这里在**实例**上覆写这四个方法（不是改原型），所以只影响本节点的两个下拉，
+ * 原生「加载图像」「CLIP 名称」那些节点保持原样。
+ *
+ * 取值一律走 options.values —— 它可能已被 applyFilter() 收窄过，
+ * 所以循环范围就是「当前目录里能看到的那些图」，不会绕到别的目录去。
+ */
+function makeCyclicCombo(widget) {
+  if (typeof widget.setValue !== "function") return;
+
+  const valuesOf = () => {
+    const values = widget.options?.values;
+    return Array.isArray(values) ? values : [];
+  };
+
+  const stepBy = (delta) => (options) => {
+    const values = valuesOf();
+    if (values.length < 2) return;
+
+    // 跟原生实现一致：吃掉这次点击，免得画布当成双击
+    if (options?.canvas) options.canvas.last_mouseclick = 0;
+
+    let index = values.indexOf(widget.value);
+    if (index === -1) {
+      // 当前值不在列表里（刚切过目录，或那张图被删了）：从对应那一端进来
+      index = delta > 0 ? -1 : values.length;
+    }
+    const next = (index + delta + values.length) % values.length;
+
+    // 打标记：这次改值是箭头点的，不是用户在下拉里选的。
+    // image 的 callback 靠它跳过「图片 → 目录」的反向同步 —— 否则在「(全部)」
+    // 里一路点过去，每跨进一个子目录 folder 就跟着跳过去、列表被收窄，
+    // 循环当场断掉。
+    widget.__cyclicStepping = true;
+    try {
+      widget.setValue(values[next], options);
+    } finally {
+      widget.__cyclicStepping = false;
+    }
+  };
+
+  widget.canIncrement = () => valuesOf().length > 1;
+  widget.canDecrement = () => valuesOf().length > 1;
+  widget.incrementValue = stepBy(1);
+  widget.decrementValue = stepBy(-1);
+}
+
 app.registerExtension({
   name: "xiaowang.LoadImageRecursive.FolderFilter",
 
@@ -57,6 +113,11 @@ app.registerExtension({
       const folderWidget = this.widgets?.find((w) => w.name === "folder");
       const imageWidget = this.widgets?.find((w) => w.name === "image");
       if (!folderWidget || !imageWidget) return;
+
+      // 两个下拉都改成首尾相接：目录走到底接回「(全部)」，图片走到底接回第一张。
+      // 只想让图片循环的话，把下面第一行删掉即可。
+      makeCyclicCombo(folderWidget);
+      makeCyclicCombo(imageWidget);
 
       // 后端给的完整候选列表。之后 imageWidget.options.values 会被我们改来改去，
       // 所以单独存一份全集当过滤源。
@@ -233,7 +294,8 @@ app.registerExtension({
       const prevImageCallback = imageWidget.callback;
       imageWidget.callback = function (value, ...rest) {
         const result = prevImageCallback?.apply(this, [value, ...rest]);
-        syncFolderFromImage();
+        // 箭头循环时不反向同步目录，否则跨目录一步就把列表收窄了
+        if (!imageWidget.__cyclicStepping) syncFolderFromImage();
         noteUnknownValue();
         return result ?? value;
       };
