@@ -49,8 +49,8 @@ than in those nodes, and this node closes it.
 3. **Sub-directory images actually load** — canvas preview, image viewer and mask
    editor all work for files in subfolders, because the real path is resolved
    before ComfyUI's `/view` handler sees it. Preview-sized requests are capped at
-   384 px, so browsing a folder does not pull a pile of 38 MB camera files over
-   the wire.
+   384 px, so browsing a folder does not pull every file down at full
+   resolution.
 4. **Bidirectional sync** — pick an image and the folder dropdown jumps to its
    folder; pick a folder and the list filters.
 5. **The ◀ ▶ arrows wrap around** — stepping past the last image lands on the
@@ -264,7 +264,7 @@ node in the ecosystem does the same thing.
    （根目录一张图都没有时，这个选项不出现）
 3. **子目录的图真的能加载** —— 画布预览、图片查看器、遮罩编辑器都能正常打开子目录里的图
    （请求进来前先把真实路径解析好）。预览类的请求会先压到 384px 再发，
-   翻目录不会拉一堆几十 MB 的原图
+   翻目录不会把每张原图整张拉下来
 4. 双向联动：选图 → 目录自动跳过去；选目录 → 列表收窄，**并且画布上的预览跟着切到该目录的第一张**
    （原生节点的预览只认自己的 callback，光改候选列表不会刷新，所以这里手动触发了同一套回调）
 5. **◀ ▶ 箭头首尾相接** —— 最后一张再往右是回到第一张，第一张再往左是跳到最后一张
