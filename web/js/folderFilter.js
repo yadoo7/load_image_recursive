@@ -27,6 +27,8 @@
 import { app } from "../../../scripts/app.js";
 
 const ALL = "(全部)";
+// 必须跟后端 __init__.py 里的 ROOT_FOLDER 逐字一致 —— 改文案要两边一起改
+const ROOT = "(根目录)";
 const NODE_NAME = "LoadImageRecursive";
 const OBJECT_INFO_URL = "/object_info/" + NODE_NAME;
 
@@ -144,15 +146,22 @@ app.registerExtension({
       const dirOf = (value) => {
         if (typeof value !== "string") return null;
         const slash = value.lastIndexOf("/");
-        return slash === -1 ? ALL : value.slice(0, slash);
+        return slash === -1 ? ROOT : value.slice(0, slash);
       };
 
       const applyFilter = () => {
         const folder = folderWidget.value;
-        imageWidget.options.values =
-          !folder || folder === ALL
-            ? all.slice()
-            : all.filter((v) => v.startsWith(folder + "/"));
+        if (!folder || folder === ALL) {
+          imageWidget.options.values = all.slice();
+        } else if (folder === ROOT) {
+          // 根目录 = 路径里不带斜杠的那些。不用 dirOf 是因为这里要的是
+          // 「这一个目录的文件」，而 dirOf 是反过来的「这个文件属于哪个目录」。
+          imageWidget.options.values = all.filter((v) => !v.includes("/"));
+        } else {
+          imageWidget.options.values = all.filter((v) =>
+            v.startsWith(folder + "/")
+          );
+        }
         app.graph?.setDirtyCanvas(true, true);
       };
 

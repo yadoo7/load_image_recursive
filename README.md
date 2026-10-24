@@ -42,7 +42,10 @@ than in those nodes, and this node closes it.
 1. **Recursive listing** — every image under `input/`, at any depth, with paths
    relative to `input` (`scans/2026/roll-01.tif`).
 2. **Folder dropdown** — pick a folder and the image list narrows to just that
-   folder. Turns a 1200-entry scroll into a 40-entry scroll.
+   folder. Turns a 1200-entry scroll into a 40-entry scroll. A dedicated
+   root-folder entry isolates the files sitting directly in `input/`, so the
+   top level stays browsable on its own instead of only being reachable
+   through the "all" entry.
 3. **Sub-directory images actually load** — canvas preview, image viewer and mask
    editor all work for files in subfolders, because the real path is resolved
    before ComfyUI's `/view` handler sees it. Preview-sized requests are capped at
@@ -256,7 +259,9 @@ node in the ecosystem does the same thing.
 **装上就有**
 
 1. 递归扫描任意层级，路径相对 `input`（如 `扫描/2026/roll-01.tif`）
-2. 「目录」下拉：选完目录，图片列表只列该目录下的文件
+2. 「目录」下拉：选完目录，图片列表只列该目录下的文件。多一个「(根目录)」，
+   只列直接躺在 `input/` 里的那些 —— 根目录的图不用再混在「(全部)」里翻
+   （根目录一张图都没有时，这个选项不出现）
 3. **子目录的图真的能加载** —— 画布预览、图片查看器、遮罩编辑器都能正常打开子目录里的图
    （请求进来前先把真实路径解析好）。预览类的请求会先压到 384px 再发，
    翻目录不会拉一堆几十 MB 的原图

@@ -443,6 +443,23 @@ class NodeDefinitionTest(unittest.TestCase):
             spec = lir.LoadImageRecursive.INPUT_TYPES()
         self.assertEqual(spec["required"]["folder"][0], [lir.ALL_FOLDERS, "a"])
 
+    def test_root_folder_listed_when_root_has_images(self):
+        """根目录有图时，「(根目录)」紧跟在「(全部)」后面、排在子目录之前。"""
+        with mock.patch.object(
+            lir, "_collect_files", return_value=["top.png", "a/x.png"]
+        ):
+            spec = lir.LoadImageRecursive.INPUT_TYPES()
+        self.assertEqual(
+            spec["required"]["folder"][0],
+            [lir.ALL_FOLDERS, lir.ROOT_FOLDER, "a"],
+        )
+
+    def test_root_folder_hidden_when_root_is_empty(self):
+        """根目录空着就不给这个选项 —— 点进去只会是空列表。"""
+        with mock.patch.object(lir, "_collect_files", return_value=["a/x.png"]):
+            spec = lir.LoadImageRecursive.INPUT_TYPES()
+        self.assertNotIn(lir.ROOT_FOLDER, spec["required"]["folder"][0])
+
     def test_validate_inputs_accepts_folder_kwarg(self):
         """folder 在 VALIDATE_INPUTS 签名里 → 跳过 combo 候选校验。
 

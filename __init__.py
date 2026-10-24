@@ -70,6 +70,7 @@ except Exception:  # pragma: no cover - aiohttp 是 ComfyUI 的硬依赖，理�
 
 SKIP_DIR_NAMES = {"clipspace"}
 ALL_FOLDERS = "(全部)"
+ROOT_FOLDER = "(根目录)"
 
 # 下拉缩略图的参数。384 够 100px 的格子在高分屏上清晰，又不至于让列表变重。
 THUMB_LIMIT = 384
@@ -329,7 +330,13 @@ class LoadImageRecursive(LoadImage):
     def INPUT_TYPES(s):
         input_dir = folder_paths.get_input_directory()
         files = _collect_files(input_dir)
-        folders = [ALL_FOLDERS] + _collect_folders(files)
+        folders = [ALL_FOLDERS]
+        # 「(根目录)」只在根目录真的躺着图片时才给。根目录空着还列出来，
+        # 点进去只会得到一个空列表 —— 那比没有这个选项更让人困惑。
+        # 往根目录丢图之后，右键「⟳ 刷新图片列表」就能看到它出现。
+        if any("/" not in f for f in files):
+            folders.append(ROOT_FOLDER)
+        folders += _collect_folders(files)
         return {
             "required": {
                 "folder": (folders, {
