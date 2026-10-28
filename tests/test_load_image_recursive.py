@@ -432,6 +432,45 @@ class InstallMiddlewareTest(unittest.TestCase):
         self.assertEqual(len(mine), 1)
 
 
+class MaskShapeTest(unittest.TestCase):
+    """MASK 输出的尺寸。
+
+    原生 LoadImage 在图片没有 alpha 通道时返回 **64×64** 的全零遮罩
+    （nodes.py 里的历史遗留）。尺寸跟图对不上，接到 SetLatentNoiseMask /
+    VAEEncodeForInpaint / InpaintModelConditioning 这类要求同尺寸遮罩的
+    节点上会直接报 shape mismatch —— 而「选了张普通 jpg 然后连 MASK」
+    恰恰是最常见的用法。这里守住「永远跟图同尺寸」。
+    """
+
+    def setUp(self):
+        try:
+            import torch
+        except Exception:  # pragma: no cover - 没装 ComfyUI 的环境跳过
+            self.skipTest("没有 torch")
+        self.torch = torch
+
+    def test_placeholder_64x64_expanded_to_image_size(self):
+        image = self.torch.zeros((1, 120, 90, 3))
+        placeholder = self.torch.zeros((64, 64))
+        with mock.patch.object(
+            lir.LoadImage, "load_image", return_value=(image, placeholder)
+        ):
+            _, mask, _ = lir.LoadImageRecursive().load_image("(全部)", "a/x.jpg")
+        self.assertEqual(tuple(mask.shape), (1, 120, 90))
+        self.assertEqual(float(mask.sum()), 0.0)
+
+    def test_real_alpha_mask_untouched(self):
+        """真有 alpha 的图（遮罩编辑器存出来的那种）原样返回，别动它。"""
+        image = self.torch.zeros((1, 120, 90, 3))
+        real = self.torch.ones((1, 120, 90))
+        with mock.patch.object(
+            lir.LoadImage, "load_image", return_value=(image, real)
+        ):
+            _, mask, _ = lir.LoadImageRecursive().load_image("(全部)", "a/x.png")
+        self.assertEqual(tuple(mask.shape), (1, 120, 90))
+        self.assertEqual(float(mask.sum()), float(real.sum()))
+
+
 class NodeDefinitionTest(unittest.TestCase):
     def test_folder_comes_before_image(self):
         with mock.patch.object(lir, "_collect_files", return_value=["a/x.png"]):
@@ -459,6 +498,35 @@ class NodeDefinitionTest(unittest.TestCase):
         with mock.patch.object(lir, "_collect_files", return_value=["a/x.png"]):
             spec = lir.LoadImageRecursive.INPUT_TYPES()
         self.assertNotIn(lir.ROOT_FOLDER, spec["required"]["folder"][0])
+
+    def test_clipspace_files_never_listed(self):
+        """遮罩编辑器（maskEditor.js）的产物全在 input/clipspace/ 下。
+
+        后端扫文件时把 clipspace 剪掉，所以它们不会出现在任何目录视图里 ——
+        那是我要的效果：几十个 painted-masked 文件不该污染图片列表。
+        但存盘契约要求 image widget 能指着它们跑，所以这里同时验一下
+        「剪掉目录」和「不剪掉就找不到文件」是两件事：后者由前端把值
+        塞进候选列表兜住（folderFilter.js 的 keepMaskValuesVisible）。
+        """
+        spec = lir.LoadImageRecursive.INPUT_TYPES()
+        listed = spec["required"]["image"][0]
+        self.assertFalse(
+            [v for v in listed if v.startswith("clipspace/")],
+            "clipspace 里的遮罩成品不该出现在下拉里",
+        )
+
+    def test_clipspace_path_still_resolvable(self):
+        """widget 值带 clipspace/ 前缀时，后端要能真的把文件找出来。
+
+        走的是 ComfyUI 原生的 get_annotated_filepath，它认 subfolder，
+        所以「剪枝」只影响列表、不影响加载。这条守住这个前提 ——
+        万一哪天有人把 middleware 的判据改严了，这里会先炸。
+        """
+        value = "clipspace/clipspace-painted-masked-1792886174550.png [input]"
+        with mock.patch.object(lir.folder_paths, "exists_annotated_filepath",
+                               return_value=True) as m:
+            self.assertTrue(lir.LoadImageRecursive.VALIDATE_INPUTS("(全部)", value))
+        m.assert_called_once_with(value)
 
     def test_validate_inputs_accepts_folder_kwarg(self):
         """folder 在 VALIDATE_INPUTS 签名里 → 跳过 combo 候选校验。

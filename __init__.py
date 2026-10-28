@@ -367,6 +367,24 @@ class LoadImageRecursive(LoadImage):
         # folder 只是前端过滤器，这里收下就扔
         # 解码、EXIF 旋转、alpha→mask 全部走原生实现
         image_tensor, mask_tensor = super().load_image(image)
+
+        # 原生在图片没有 alpha 通道时返回 **64×64** 的全零遮罩
+        # （nodes.py:1799 的历史遗留）。尺寸跟图对不上，接到
+        # SetLatentNoiseMask / VAEEncodeForInpaint / InpaintModelConditioning
+        # 这类要求同尺寸遮罩的节点上会直接报 shape mismatch。
+        # 这里补成跟图同尺寸的全零遮罩 —— 语义一模一样（都是「没有遮罩」），
+        # 但下游不会炸。
+        if tuple(mask_tensor.shape[-2:]) != tuple(image_tensor.shape[1:3]):
+            # 局部 import：模块顶层不引 torch，这样没装 ComfyUI 的环境
+            # 也能 import 本模块去跑 INPUT_TYPES / 扫描逻辑那批测试。
+            # 真走到这里说明已经有 image tensor 了，torch 必然在。
+            import torch
+
+            mask_tensor = torch.zeros(
+                (image_tensor.shape[0], image_tensor.shape[1], image_tensor.shape[2]),
+                dtype=mask_tensor.dtype,
+                device="cpu",
+            )
         return (image_tensor, mask_tensor, image)
 
     @classmethod

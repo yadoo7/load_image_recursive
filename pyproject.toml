@@ -1,7 +1,7 @@
 [project]
 name = "load_image_recursive"
-version = "1.0.4"
-description = "Load Image that lists sub-directories of ComfyUI/input, with a folder dropdown, a root-only filter, working sub-directory previews, and cyclic arrow navigation."
+version = "1.0.5"
+description = "Load Image that lists sub-directories of ComfyUI/input, with a folder dropdown, a root-only filter, working sub-directory previews, cyclic arrow navigation, and a lightweight built-in mask editor."
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,6 +13,9 @@ keywords = [
     "subfolder",
     "recursive",
     "thumbnail",
+    "mask",
+    "mask-editor",
+    "inpainting",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

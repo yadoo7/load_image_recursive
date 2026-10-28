@@ -22,6 +22,9 @@
  * 注意别用 __v_isReactive 做判断 —— 节点已入图时 options/values 带这个标记，
  * 未入图（例如 LiteGraph.createNode 出来还没 add 的裸节点）时没有，
  * 两种情况功能都正常。
+ *
+ * 另外还替 maskEditor.js 兜一件事：遮罩成品存在 clipspace 下，后端扫不到，
+ * 所以那个值由这里负责塞进候选列表（见 keepMaskValuesVisible）。
  */
 
 import { app } from "../../../scripts/app.js";
@@ -31,6 +34,9 @@ const ALL = "(全部)";
 const ROOT = "(根目录)";
 const NODE_NAME = "LoadImageRecursive";
 const OBJECT_INFO_URL = "/object_info/" + NODE_NAME;
+// 遮罩编辑器（maskEditor.js）存下来的成品。后端扫描时把 clipspace 剪掉了，
+// 所以这个值永远不会出现在候选列表里 —— 得由前端补进去，否则保存完下拉是空的。
+const CLIPSPACE_PREFIX = "clipspace/";
 
 /**
  * 让 combo 的 ◀ ▶ 箭头首尾相接。
@@ -267,6 +273,8 @@ app.registerExtension({
 
           lastUnknown = null;
           applyFilter();
+          // 后端列表重建会把 clipspace 的成品冲掉，这里补回来
+          keepMaskValuesVisible();
         } catch (err) {
           console.warn("[LoadImageRecursive] 刷新图片列表失败：", err);
         } finally {
@@ -290,6 +298,32 @@ app.registerExtension({
         reloadFromServer();
       };
 
+      /**
+       * 遮罩成品要能在下拉里看见。
+       *
+       * 后端有意跳过 clipspace（那是个临时文件堆），所以保存完遮罩之后
+       * image widget 指着 `clipspace/clipspace-painted-masked-xxx.png [input]`，
+       * 而候选列表里没有这一项 —— 下拉会显示成空白，用户以为自己存失败了。
+       *
+       * 这里补两处：全集 all（保证 reload / applyFilter 之后还在），
+       * 和当前正在显示的 options.values（当前目录被过滤过，可能正好没含它）。
+       *
+       * 只认 clipspace/ 前缀，别把别的脏值也学进来。
+       */
+      const keepMaskValuesVisible = () => {
+        const value = imageWidget.value;
+        if (typeof value !== "string" || !value.startsWith(CLIPSPACE_PREFIX)) return;
+        if (!known.has(value)) {
+          known.add(value);
+          all.push(value);
+          all.sort();
+        }
+        const current = imageWidget.options?.values;
+        if (Array.isArray(current) && !current.includes(value)) {
+          current.unshift(value);
+        }
+      };
+
       // ---- 回调挂钩 ---------------------------------------------------------
 
       const prevFolderCallback = folderWidget.callback;
@@ -306,6 +340,7 @@ app.registerExtension({
         // 箭头循环时不反向同步目录，否则跨目录一步就把列表收窄了
         if (!imageWidget.__cyclicStepping) syncFolderFromImage();
         noteUnknownValue();
+        keepMaskValuesVisible();
         return result ?? value;
       };
 
@@ -325,6 +360,7 @@ app.registerExtension({
         healMisplacedValue();
         syncFolderFromImage();
         noteUnknownValue();
+        keepMaskValuesVisible();
       };
 
       this._folderFilterSync();

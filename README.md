@@ -58,6 +58,41 @@ than in those nodes, and this node closes it.
    grey and stop at either end. Wrapping never drags the folder dropdown along,
    so a loop over `(all)` keeps covering every image instead of snapping into
    whichever subfolder it happens to reach.
+6. **A light-weight mask editor** — the `mask_edit` button (or right-click →
+   *Edit mask*) opens a brush panel on top of the current image. Left-drag to
+   paint, right-drag to resize the brush, wheel to zoom, space-drag to pan.
+   Auto-fill holes closes a region from its outline alone, so you trace a
+   silhouette instead of filling it in. Toggle between colour-overlay view
+   (default: the photo plus green strokes) and black-and-white mask view. Saved
+   masks land in `input/clipspace/` under ComfyUI's own
+   `clipspace-painted-masked-*.png` naming, with the mask stored in the alpha
+   channel — the same contract the stock mask editor uses, so the `MASK` output
+   works with no backend changes and either editor can reopen the other's file.
+
+> **Making a painted mask actually do something**
+>
+> The mask lives in the image file's **alpha channel**. On save the node's
+> `image` widget is repointed at that new file, so **no extra node is needed to
+> "apply" the mask**. The `IMAGE` output is untouched (RGB preserved), so your
+> main graph behaves exactly as before — the mask just travels along with the
+> image.
+>
+> The `MASK` output, however, **has to be connected** for anything to happen:
+>
+> | Goal | Wire `MASK` into |
+> |---|---|
+> | Repaint only inside the mask | `SetLatentNoiseMask` before the sampler |
+> | Classic inpainting | the mask input of `VAEEncodeForInpaint` / `InpaintModelConditioning` |
+> | Crop / composite / feather | `ImageCompositeMasked`, `MaskBlur`, `GrowMask`, … |
+>
+> Leaving `MASK` dangling means painting has no effect — that's a general
+> ComfyUI rule, not something specific to this node.
+>
+> One more thing: a plain JPEG has no alpha channel, and the stock `LoadImage`
+> then returns a **64×64** all-zero mask, which trips a shape mismatch in nodes
+> that expect an image-sized mask. This node expands it to a full-size all-zero
+> mask instead — same meaning ("no mask"), but nothing downstream breaks.
+
 
 Everything else is inherited from the stock node, unchanged: decoding, EXIF
 handling, alpha→mask, the upload button, drag & drop, paste, mask editor,
@@ -270,6 +305,33 @@ node in the ecosystem does the same thing.
 5. **◀ ▶ 箭头首尾相接** —— 最后一张再往右是回到第一张，第一张再往左是跳到最后一张
    （原生 combo 走到头就变灰、点不动）。而且箭头循环时**不会把目录下拉一起带走**，
    所以在「(全部)」里一路点下去，是真的把整库绕一圈，而不是半路被吸进某个子目录
+6. **轻量遮罩编辑器** —— 点节点上的「mask_edit」按钮（或右键「编辑遮罩」）就在当前图上
+   铺一层画笔面板。左键涂、右键左右拖动改笔刷大小、滚轮缩放、空格或中键拖动平移。
+   **自动填充漏洞**：只描轮廓就能把封闭区域填满，不用来回抹。可切「颜色叠加」（默认，
+   原图 + 绿色涂抹）和「仅遮罩」（只看黑白）两种视图。存下来的文件落在 `input/clipspace/`
+   下，命名和 alpha 存法都沿用 ComfyUI 原生的 `clipspace-painted-masked-*.png` 契约 ——
+   后端一行不用改，`MASK` 输出直接可用，而且两个编辑器能互相打开对方存的文件。
+
+> **涂完遮罩怎么让它生效**
+>
+> 遮罩是**存在图片文件的 alpha 通道里**的，保存后节点的 `image` widget 会自动指向那个
+> 新文件，所以**不需要额外加节点去"应用"遮罩**。`IMAGE` 输出保持不变（RGB 原样保留），
+> 主图流程完全不受影响 —— 遮罩只是随图一起走的附加信息。
+>
+> 但 `MASK` 这个输出**必须连出去**才会起作用。常见接法：
+>
+> | 目的 | 接到哪 |
+> |---|---|
+> | 只在遮罩区域重绘 | KSampler 之前串一个 `SetLatentNoiseMask` |
+> | 局部重绘（inpainting） | `VAEEncodeForInpaint` / `InpaintModelConditioning` 的 mask 输入 |
+> | 裁剪 / 合成 / 模糊遮罩 | `ImageCompositeMasked`、`MaskBlur`、`GrowMask` 等 |
+>
+> `MASK` 悬空时画遮罩不会有任何效果 —— 这是 ComfyUI 的通用规则，不是本节点的问题。
+>
+> 另外：普通 jpg 没有 alpha 通道，原生 `LoadImage` 会给一个 **64×64** 的全零遮罩，
+> 接到要求同尺寸遮罩的节点上会报 shape mismatch。本节点把它补成跟图同尺寸的全零遮罩
+> —— 语义一样（都是「没有遮罩」），但下游不会炸。
+
 
 解码、EXIF、alpha→mask、上传按钮、拖拽粘贴、遮罩编辑器、路径安全校验
 全部继承原生实现，输出完全一致（`IMAGE` / `MASK` / `STRING`）。
