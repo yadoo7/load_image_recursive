@@ -19,3 +19,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Documentation assets: kept in git so the GitHub README can render the
+# screenshot, but MUST NOT ship inside the Comfy Registry archive. A binary
+# image here is what got 1.0.5 flagged (it made the package ~86% PNG).
+docs/
