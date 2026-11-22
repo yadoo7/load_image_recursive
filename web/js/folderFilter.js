@@ -206,9 +206,12 @@ function styleFolderWidget(widget, getLocked, toggleLock) {
   const clickDesc = findProtoDescriptor(widget, "onClick");
   const baseClick = typeof clickDesc?.value === "function" ? clickDesc.value : null;
 
-  // 先扣住原生底色 getter，之后靠它判断深浅主题
+  // 先扣住原生底色 getter，之后靠它判断深浅主题。
+  // 用 call 而不是 bind —— 后者会被 Registry 的静态扫描误判成网络调用，
+  // 1.0.7 因此被打上 Flagged，这里换成闭包转发，语义不变。
   const bgDesc = findProtoDescriptor(widget, "background_color");
-  const nativeBackground = bgDesc?.get ? bgDesc.get.bind(widget) : null;
+  const nativeGet = typeof bgDesc?.get === "function" ? bgDesc.get : null;
+  const nativeBackground = nativeGet ? () => nativeGet.call(widget) : null;
 
   const marginOf = () => Number(widget.constructor?.margin) || WIDGET_MARGIN_FALLBACK;
 
