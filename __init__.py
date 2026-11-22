@@ -322,6 +322,120 @@ def _install_view_middleware():
 
 
 # ---------------------------------------------------------------------------
+# /lir/ 辅助 API
+# ---------------------------------------------------------------------------
+
+# 注意：不能用 @web.post("/path") —— aiohttp 模块级的 web.post(path, handler)
+# 没有默认 handler 参数，装饰器写法会直接 TypeError，把整个插件炸到加载失败。
+# 装饰器风格必须走 web.RouteTableDef。
+_lir_routes = web.RouteTableDef() if web is not None else None
+
+if _lir_routes is not None:
+
+    @_lir_routes.post("/lir/export-mask")
+    async def export_mask_handler(request):
+        """把前端传来的 mask 灰度图转成黑白 PNG，存到 output/。"""
+        data = await request.post()
+        image_part = data.get("image")
+        if not image_part:
+            return web.Response(status=400)
+        from PIL import Image
+        import time as _time
+
+        raw = Image.open(image_part).convert("L")
+        r, _, _, _ = raw.convert("RGBA").split()
+        out = Image.merge("RGBA", (r, r, r, r))
+        output_dir = folder_paths.get_output_directory()
+        ts = int(_time.time() * 1000)
+        filename = f"mask_{ts}.png"
+        filepath = os.path.join(output_dir, filename)
+        out.save(filepath, format="PNG")
+        return web.json_response({"filename": filename, "subfolder": "", "type": "output"})
+
+    @_lir_routes.get("/lir/exif")
+    async def exif_handler(request):
+        """读取图片 EXIF，返回焦距/光圈/快门/ISO。"""
+        from PIL import Image
+
+        filename = request.rel_url.query.get("filename", "")
+        subfolder = request.rel_url.query.get("subfolder", "")
+        type_name = request.rel_url.query.get("type", "input")
+        rel = f"{subfolder}/{filename}" if subfolder else filename
+        path = _resolve_in_type_dir(rel, type_name)
+        if path is None or not os.path.isfile(path):
+            return web.json_response({"error": "file not found"}, status=404)
+        try:
+            with Image.open(path) as img:
+                exif = img._getexif()
+            if not exif:
+                return web.json_response({"error": "no exif"})
+            from PIL.ExifTags import TAGS
+            result = {}
+            for tag_id, value in exif.items():
+                tag = TAGS.get(tag_id, tag_id)
+                if tag == "FocalLength":
+                    try:
+                        fl = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if fl:
+                        result["focal_length"] = f"{int(fl)}mm"
+                elif tag == "FNumber":
+                    try:
+                        fn = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if fn:
+                        result["aperture"] = f"f/{fn:.1f}"
+                elif tag == "ExposureTime":
+                    try:
+                        exp = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if exp and 0 < exp < 1:
+                        result["shutter"] = f"1/{int(round(1/exp))}s"
+                    elif exp >= 1:
+                        result["shutter"] = f"{exp:.1f}s"
+                elif tag == "ISOSpeedRatings":
+                    iso = value
+                    if isinstance(iso, int) and iso > 0:
+                        result["iso"] = str(iso)
+                    elif isinstance(iso, (list, tuple)) and iso:
+                        result["iso"] = str(iso[0])
+            if not result:
+                return web.json_response({"error": "no exif"})
+            return web.json_response(result)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+
+def _install_lir_routes():
+    """把 /lir/ 路由挂到 ComfyUI 的 aiohttp app 上。
+
+    custom node 导入发生在 app 启动（冻结）之前，router 还能加路由。
+    挂不上只影响两个附加 API（导出遮罩 / EXIF），节点本体照常工作。
+    """
+    if _lir_routes is None:
+        return False
+    try:
+        from server import PromptServer
+    except Exception as exc:
+        logging.warning("[LoadImageRecursive] 拿不到 PromptServer，/lir/ 路由未挂载: %s", exc)
+        return False
+    app = getattr(getattr(PromptServer, "instance", None), "app", None)
+    if app is None:
+        logging.warning("[LoadImageRecursive] PromptServer.instance 还没建好，/lir/ 路由未挂载")
+        return False
+    try:
+        app.router.add_routes(_lir_routes)
+    except Exception as exc:
+        logging.warning("[LoadImageRecursive] 注册 /lir/ 路由失败: %s", exc)
+        return False
+    logging.info("[LoadImageRecursive] /lir/export-mask、/lir/exif 已注册")
+    return True
+
+
+# ---------------------------------------------------------------------------
 # 节点
 # ---------------------------------------------------------------------------
 
@@ -417,3 +531,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {"LoadImageRecursive": "Load Image (Recursive)"}
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
 
 _install_view_middleware()
+_install_lir_routes()

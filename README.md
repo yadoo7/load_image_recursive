@@ -42,10 +42,10 @@ than in those nodes, and this node closes it.
 1. **Recursive listing** — every image under `input/`, at any depth, with paths
    relative to `input` (`scans/2026/roll-01.tif`).
 2. **Folder dropdown** — pick a folder and the image list narrows to just that
-   folder. Turns a 1200-entry scroll into a 40-entry scroll. A dedicated
-   root-folder entry isolates the files sitting directly in `input/`, so the
-   top level stays browsable on its own instead of only being reachable
-   through the "all" entry.
+   folder's own files, without pulling in anything from its sub-folders. Turns a
+   1200-entry scroll into a 40-entry scroll. A dedicated root-folder entry
+   isolates the files sitting directly in `input/`, so the top level stays
+   browsable on its own instead of only being reachable through the "all" entry.
 3. **Sub-directory images actually load** — canvas preview, image viewer and mask
    editor all work for files in subfolders, because the real path is resolved
    before ComfyUI's `/view` handler sees it. Preview-sized requests are capped at
@@ -55,10 +55,15 @@ than in those nodes, and this node closes it.
    folder; pick a folder and the list filters.
 5. **The ◀ ▶ arrows wrap around** — stepping past the last image lands on the
    first, and stepping back from the first lands on the last. Stock combos go
-   grey and stop at either end. Wrapping never drags the folder dropdown along,
-   so a loop over `(all)` keeps covering every image instead of snapping into
-   whichever subfolder it happens to reach.
-6. **A light-weight mask editor** — the `mask_edit` button (or right-click →
+   grey and stop at either end.
+6. **A lock on the folder control** — the folder widget carries a padlock at its
+   left end. While locked, that widget's ◀ ▶ arrows are disabled: they are drawn
+   in the disabled colour and no longer change the value, so a stray click near
+   the edge of the control while you are picking an image cannot move the
+   folder. Locking also stops the folder from following the image selection.
+   Picking a folder from the dropdown still works as before — the lock covers
+   the arrows only. The state is saved with the workflow.
+7. **A light-weight mask editor** — the `mask_edit` button (or right-click →
    *Edit mask*) opens a brush panel on top of the current image. Left-drag to
    paint, right-drag to resize the brush, wheel to zoom, space-drag to pan.
    Auto-fill holes closes a region from its outline alone, so you trace a
@@ -68,6 +73,10 @@ than in those nodes, and this node closes it.
    `clipspace-painted-masked-*.png` naming, with the mask stored in the alpha
    channel — the same contract the stock mask editor uses, so the `MASK` output
    works with no backend changes and either editor can reopen the other's file.
+8. **Right-click tools** — folder bookmarks (add / jump / remove), the last 8
+   images you loaded, landscape-only and portrait-only filtering, an EXIF panel
+   (focal length, aperture, shutter, ISO, camera), and an export that writes the
+   current mask to `output/` as a black-and-white PNG.
 
 > **Making a painted mask actually do something**
 >
@@ -114,13 +123,23 @@ Add **Load Image (Recursive)** from the `image` category (or search for
 
 | Widget | What it does |
 |---|---|
-| `folder` | Filter only. `(全部)` / `(All)` shows everything. **Does not affect the output.** |
+| `folder` | Filter only. `(全部)` / `(All)` shows everything. **Does not affect the output.** The padlock at its left end toggles the lock. |
 | `image` | The actual pick. Paths include the sub-folder, e.g. `scans/2026/roll-01.tif`. |
 | *(upload button)* | Same as the stock node. Uploaded files land in the root of `input/`. |
 
-Switching folders deliberately **does not** change your current image selection —
-it only narrows the list. You re-pick explicitly. Nothing silently swaps your
-input behind your back.
+Switching folders changes the current image **only when that image is not in the
+new folder**: the node then selects the first entry of the folder and refreshes
+the canvas preview, so the preview never keeps showing a file the list no longer
+contains. An image that is still in the new folder is left alone.
+
+**Locking the folder.** Click the padlock at the left end of the `folder` widget
+(or right-click → *锁定目录（停用左右箭头）*). Two things happen: the widget's
+◀ ▶ arrows are disabled, and the folder stops following the image selection.
+The arrows are disabled on purpose — while you are picking images, a click that
+lands a few pixels off the `image` widget hits the folder arrows instead and
+silently changes the directory. Locking removes that failure mode. Choosing a
+folder from the dropdown is unaffected, so the lock never prevents a deliberate
+change. The lock state is written to the workflow's node properties.
 
 ### Keeping the list fresh
 
@@ -231,9 +250,9 @@ update — hence optional, and with a `--revert`.
 python -m unittest discover -s tests -v
 ```
 
-32 tests covering recursive scanning, directory-escape protection, thumbnail
-downscaling and LRU eviction, the middleware routing table, and the
-`VALIDATE_INPUTS` / `INPUT_TYPES` contract.
+38 tests covering recursive scanning, directory-escape protection, thumbnail
+downscaling and LRU eviction, the middleware routing table, the `/lir/` routes,
+and the `VALIDATE_INPUTS` / `INPUT_TYPES` contract.
 
 The suite works in two environments:
 
@@ -275,6 +294,33 @@ node imports and subclasses ComfyUI code at runtime; how that interacts with MIT
 for a plugin is a judgment call you should make for your own use. Every custom
 node in the ecosystem does the same thing.
 
+## Changelog
+
+### 1.0.7
+
+* **Folder lock.** A padlock is drawn at the left end of the `folder` widget.
+  While locked, the widget's ◀ ▶ arrows are disabled and the folder no longer
+  follows the image selection. The lock covers the arrows only: picking a folder
+  from the dropdown continues to work. Added to avoid accidental folder changes
+  when clicking near the edge of the `image` widget. State is persisted in the
+  node properties. The same toggle is available from the right-click menu.
+* **`folder` and `image` are now visually distinct.** The folder widget uses its
+  own outline and fill colour (teal, amber while locked) and the widget labels
+  are translated. The lock indicator is drawn as a canvas path, so arrow
+  stepping no longer produces garbled glyphs.
+* **Right-click menu additions:** folder bookmarks (add / jump / remove), the
+  last 8 images loaded, landscape-only and portrait-only filters, an EXIF panel,
+  and export of the current mask to `output/` as a black-and-white PNG.
+* **Backend:** two new routes, `/lir/exif` and `/lir/export-mask`, used by the
+  menu items above.
+* **Fix:** a folder entry now lists only the images directly inside it. Files in
+  its sub-folders are no longer included, so nested directories can be selected
+  independently.
+
+### 1.0.6
+
+* Registry packaging: `docs/` excluded from the published archive.
+
 ---
 
 ## 中文说明
@@ -294,23 +340,30 @@ node in the ecosystem does the same thing.
 **装上就有**
 
 1. 递归扫描任意层级，路径相对 `input`（如 `扫描/2026/roll-01.tif`）
-2. 「目录」下拉：选完目录，图片列表只列该目录下的文件。多一个「(根目录)」，
-   只列直接躺在 `input/` 里的那些 —— 根目录的图不用再混在「(全部)」里翻
+2. 「目录」下拉：选完目录，图片列表只列该目录**本级**的文件，不包含其子目录里的图。
+   多一个「(根目录)」，只列直接躺在 `input/` 里的那些 —— 根目录的图不用再混在「(全部)」里翻
    （根目录一张图都没有时，这个选项不出现）
 3. **子目录的图真的能加载** —— 画布预览、图片查看器、遮罩编辑器都能正常打开子目录里的图
    （请求进来前先把真实路径解析好）。预览类的请求会先压到 384px 再发，
    翻目录不会把每张原图整张拉下来
-4. 双向联动：选图 → 目录自动跳过去；选目录 → 列表收窄，**并且画布上的预览跟着切到该目录的第一张**
+4. 双向联动：选图 → 目录自动跳过去（锁定后不跳）；选目录 → 列表收窄，**并且画布上的预览跟着切到该目录的第一张**
    （原生节点的预览只认自己的 callback，光改候选列表不会刷新，所以这里手动触发了同一套回调）
 5. **◀ ▶ 箭头首尾相接** —— 最后一张再往右是回到第一张，第一张再往左是跳到最后一张
-   （原生 combo 走到头就变灰、点不动）。而且箭头循环时**不会把目录下拉一起带走**，
-   所以在「(全部)」里一路点下去，是真的把整库绕一圈，而不是半路被吸进某个子目录
-6. **轻量遮罩编辑器** —— 点节点上的「mask_edit」按钮（或右键「编辑遮罩」）就在当前图上
+   （原生 combo 走到头就变灰、点不动）
+6. **「目录」控件可锁定** —— 控件左端有一个小锁图标，点一下即锁定。锁定后该控件的
+   ◀ ▶ 按钮停用（变禁用灰、点击不再切换目录），同时目录不再跟随图片选择。
+   **锁定只作用于左右按钮，通过下拉菜单切换目录不受影响。**
+   这个功能是为了避免选图时误点控件边缘把目录带走。
+   锁定状态随工作流保存，右键菜单里也有同一个开关
+7. **轻量遮罩编辑器** —— 点节点上的「mask_edit」按钮（或右键「编辑遮罩」）就在当前图上
    铺一层画笔面板。左键涂、右键左右拖动改笔刷大小、滚轮缩放、空格或中键拖动平移。
    **自动填充漏洞**：只描轮廓就能把封闭区域填满，不用来回抹。可切「颜色叠加」（默认，
    原图 + 绿色涂抹）和「仅遮罩」（只看黑白）两种视图。存下来的文件落在 `input/clipspace/`
    下，命名和 alpha 存法都沿用 ComfyUI 原生的 `clipspace-painted-masked-*.png` 契约 ——
    后端一行不用改，`MASK` 输出直接可用，而且两个编辑器能互相打开对方存的文件。
+8. **右键菜单工具** —— 目录书签（收藏 / 跳转 / 删除）、最近加载的 8 张图、
+   只看横图 / 只看竖图 / 显示全部、图片信息（焦距 / 光圈 / 快门 / ISO / 机型）、
+   把当前遮罩导出为黑白 PNG 到 `output/`。
 
 > **涂完遮罩怎么让它生效**
 >
@@ -388,14 +441,36 @@ middleware 只接管原生必然失败的请求。`input` 根目录的图原生�
 python -m unittest discover -s tests -v
 ```
 
-32 个测试，覆盖递归扫描、目录逃逸防护、缩略图降采样与 LRU 淘汰、
-middleware 分流表、以及 `INPUT_TYPES` / `VALIDATE_INPUTS` 契约。
+38 个测试，覆盖递归扫描、目录逃逸防护、缩略图降采样与 LRU 淘汰、
+middleware 分流表、`/lir/` 路由、以及 `INPUT_TYPES` / `VALIDATE_INPUTS` 契约。
 装了 ComfyUI 就用真模块，没装就自动装 stub（CI 里只要 `aiohttp` + `Pillow`，
 不用拉 torch）。前端行为需要活的 ComfyUI，是用无头浏览器端到端验证的。
 
 **注意**
 
 * 「目录」只是前端过滤器，不参与出图，也不参与缓存判定（切目录不会触发重跑）
-* 切目录**不会**自动改你已选的图 —— 需要重新选。这是故意的，不能悄悄换掉出图输入
+* 切目录时，如果当前选中的图**不在**新目录里，会自动改选该目录的第一张并刷新预览
+  （避免预览停在列表里已经没有的文件上）；当前图仍在新目录里则保持不动
+* 「目录」的锁只停用左右箭头和自动跟随，下拉菜单选目录照常可用
 * 空目录不会出现在下拉里（目录是从文件反推的）
 * `clipspace/` 会被跳过（那是 MaskEditor 的临时目录）
+
+**更新记录**
+
+**1.0.7**
+
+* 新增：「目录」控件左端内嵌锁定图标。锁定后该控件的 ◀ ▶ 按钮停用，点击不再切换目录；
+  同时目录不再跟随图片选择。锁定只作用于左右按钮，通过下拉菜单切换目录不受影响。
+  该功能用于避免选图时误点控件边缘导致目录变更。锁定状态随工作流保存，
+  右键菜单提供同一开关。
+* 新增：「目录」与「图像」控件外观区分（各自描边与底色，标签改为中文）。
+  锁图标以 canvas 路径绘制，箭头切换时不再出现乱码。
+* 新增：右键菜单工具 —— 目录书签（收藏 / 跳转 / 删除）、最近加载的 8 张图、
+  只看横图 / 只看竖图 / 显示全部、图片信息（EXIF）、导出当前遮罩为黑白 PNG 到 `output/`。
+* 后端新增 `/lir/exif` 与 `/lir/export-mask` 两个路由，供上述菜单项使用。
+* 修正：目录条目只列出该目录本级的图片，不再包含其子目录中的图片，
+  因此嵌套目录可以分别选中。
+
+**1.0.6**
+
+* 打包：将 `docs/` 排除出发布包。
