@@ -7,14 +7,28 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Python 3.9 已于 2025-10 停止维护，在 ubuntu-latest（24.04）上
+    # actions/setup-python 匹配不到 3.9 的预编译包，连续两次重跑都挂在
+    # 这一步（代码一次都没执行）。因此把 3.9 钉在 ubuntu-22.04，
+    # 3.12 继续跑 latest。
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.12"]
+        include:
+          - os: ubuntu-22.04
+            python-version: "3.9"
+          - os: ubuntu-latest
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v4
+
+      # 装 Python 失败时，这几行能直接看出跑在哪个镜像上。
+      - name: Show runner image
+        run: |
+          uname -m
+          (lsb_release -ds || head -2 /etc/os-release)
 
       - uses: actions/setup-python@v5
         with:
