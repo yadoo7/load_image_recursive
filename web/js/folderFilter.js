@@ -19,12 +19,14 @@
  *
  * 另外管一件事：**列表的刷新**。
  * ComfyUI 的 INPUT_TYPES 只在建节点时取一次，所以之后往 input 里新建文件夹、
- * 拖图进去、或者用上传按钮传图，下拉里都看不到。三条路各自触发一次重建：
+ * 拖图进去、或者用上传按钮传图，下拉里都看不到。四条路各自触发一次重建：
  *
- *   1. refreshComboInNodes 扩展钩子 —— ComfyUI 每次重建 combo 列表都会调，
+ *   1. 图像控件左端的刷新图标 —— 点一下即重建，最直观的入口，
+ *      新加的图片/目录当场就能在下拉里看到，不用重启 ComfyUI
+ *   2. refreshComboInNodes 扩展钩子 —— ComfyUI 每次重建 combo 列表都会调，
  *      而且它是直接 `options.values = 后端新列表`，会把我们的过滤冲掉，必须补回来
- *   2. 上传按钮的 callback —— 传完图延时重建
- *   3. 节点右键菜单「刷新图片列表」—— 前两条都没覆盖到时的兜底
+ *   3. 上传按钮的 callback —— 传完图延时重建
+ *   4. 节点右键菜单「刷新图片列表」—— 前几条都没覆盖到时的兜底
  *
  * 之所以能直接换掉 options.values，是因为 ComfyUI 那套 Vue 下拉会跟着重渲染。
  * 实测：赋值 + setDirtyCanvas 之后，下拉列表当场就变成新列表。
@@ -173,6 +175,64 @@ function drawLockGlyph(ctx, cx, cy, size, locked, color) {
   // 锁体：实心圆角矩形，比线框在小尺寸下清楚得多
   ctx.beginPath();
   ctx.roundRect(cx - bodyW / 2, bodyTop, bodyW, bodyH, [size * 0.14]);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * 在 widget 左端画一个「刷新」图标 —— 带缺口的圆弧 + 末端箭头。
+ *
+ * 跟锁图标一样全部走 canvas path，不用 emoji（原生文字截断会按像素宽度
+ * 把 emoji 的代理对从中间切开，渲染成乱码方块）。
+ *
+ * 缺口开在右上，箭头落在弧的末端、指向顺时针方向，一眼就是"转一圈"的意思。
+ *
+ * @param ctx     canvas 2d context
+ * @param cx,cy   图标中心
+ * @param size    图标高度
+ * @param color   线条/填充颜色
+ */
+function drawRefreshGlyph(ctx, cx, cy, size, color) {
+  const r = size * 0.45;
+  // 缺口在右上：弧从 50°（右下）顺时针走到 310°（右上），经过右、下、左、上，
+  // 留 100° 的缺口跨过 0°/360°（右侧偏上）。
+  const start = (50 * Math.PI) / 180;
+  const end = (310 * Math.PI) / 180;
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1.4, size * 0.15);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // 圆弧本体
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, start, end, false); // 顺时针
+  ctx.stroke();
+
+  // 箭头头：落在弧的末端（310°，右上），指向顺时针切线方向。
+  // 顺时针切线 = 半径角度 + 90°。箭头从弧端点沿切线再往外延伸，两翼向切线两侧展开。
+  const ang = end;
+  const px = cx + r * Math.cos(ang);
+  const py = cy + r * Math.sin(ang);
+  const tangent = ang + Math.PI / 2;
+  const headLen = size * 0.38;
+  const headHalf = size * 0.17;
+  const tipX = px + headLen * Math.cos(tangent);
+  const tipY = py + headLen * Math.sin(tangent);
+  const perp = tangent + Math.PI / 2;
+  const wing1X = px + headHalf * Math.cos(perp);
+  const wing1Y = py + headHalf * Math.sin(perp);
+  const wing2X = px - headHalf * Math.cos(perp);
+  const wing2Y = py - headHalf * Math.sin(perp);
+
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(wing1X, wing1Y);
+  ctx.lineTo(wing2X, wing2Y);
+  ctx.closePath();
   ctx.fill();
 
   ctx.restore();
@@ -334,6 +394,131 @@ function styleFolderWidget(widget, getLocked, toggleLock) {
       // 控件矮的时候按比例缩，最高不超过标称尺寸（12 → 锁体 17~27，正好让开箭头）
       Math.min(height * 0.62, LOCK_ICON_SIZE),
       locked,
+      color,
+    );
+  };
+}
+
+/**
+ * 给【图像】下拉左端塞一个刷新图标，点它就重建候选列表。
+ *
+ * 布局与【目录】的锁图标同款：左箭头右移 ARROW_SHIFT，文字起笔跟着右移，
+ * 腾出左端放图标。图标落在 17~27，点击热区到 28，不侵占右移后的左箭头（29 起）。
+ *
+ * 与锁图标的区别：
+ *   - 不换底色、不换描边 —— 图像控件保持原生外观，只多一个图标
+ *   - 图标颜色用主题正文色，刷新进行中转成青色高亮，给用户"转了一下"的反馈
+ *
+ * @param widget  image combo widget
+ * @param reload  () => Promise<void> | undefined，点击时调用的重建函数
+ */
+function styleImageWidget(widget, reload) {
+  const drawDesc = findProtoDescriptor(widget, "drawWidget");
+  const baseDraw = typeof drawDesc?.value === "function" ? drawDesc.value : null;
+  if (!baseDraw) return;
+
+  const arrowDesc = findProtoDescriptor(widget, "drawArrowButtons");
+  const baseArrow = typeof arrowDesc?.value === "function" ? arrowDesc.value : null;
+
+  const textDesc = findProtoDescriptor(widget, "drawTruncatingText");
+  const baseText = typeof textDesc?.value === "function" ? baseText : null;
+
+  const clickDesc = findProtoDescriptor(widget, "onClick");
+  const baseClick = typeof clickDesc?.value === "function" ? clickDesc.value : null;
+
+  const marginOf = () => Number(widget.constructor?.margin) || WIDGET_MARGIN_FALLBACK;
+
+  // 刷新进行中的标志：点击后置 true，重建结束置回 false，图标据此换色
+  let refreshing = false;
+
+  // --- 箭头：左箭头右移，右箭头不动（与目录控件同款）---------------------
+  if (baseArrow) {
+    widget.drawArrowButtons = function (ctx, width) {
+      const { height, text_color: textColor, disabledTextColor, y } = this;
+      const margin = marginOf();
+      const arrowMargin = Number(this.constructor?.arrowMargin) || 6;
+      const arrowWidth = Number(this.constructor?.arrowWidth) || 10;
+
+      const leftNear = margin + arrowMargin + ARROW_SHIFT; // 29
+      const leftFar = leftNear + arrowWidth; // 39
+      const rightNear = margin + arrowMargin; // 21（右箭头不动）
+      const rightFar = rightNear + arrowWidth; // 31
+
+      ctx.fillStyle = this.canDecrement() ? textColor : disabledTextColor;
+      ctx.beginPath();
+      ctx.moveTo(leftFar, y + 5);
+      ctx.lineTo(leftNear, y + height * 0.5);
+      ctx.lineTo(leftFar, y + height - 5);
+      ctx.fill();
+
+      ctx.fillStyle = this.canIncrement() ? textColor : disabledTextColor;
+      ctx.beginPath();
+      ctx.moveTo(width - rightFar, y + 5);
+      ctx.lineTo(width - rightNear, y + height * 0.5);
+      ctx.lineTo(width - rightFar, y + height - 5);
+      ctx.fill();
+    };
+  }
+
+  // --- 文字：起笔右移，避开右移后的左箭头 --------------------------------
+  if (baseText) {
+    widget.drawTruncatingText = function (opts) {
+      const next = Object.assign({}, opts);
+      if (next.leftPadding === undefined) next.leftPadding = 5 + ARROW_SHIFT;
+      return baseText.call(this, next);
+    };
+  }
+
+  // --- 点击：最左端一条拦成刷新按钮 ------------------------------------
+  //
+  // 原生 onClick 的分流是「x<40 → 左箭头 / x>width-40 → 右箭头 / 其余 → 下拉」。
+  // 刷新图标在 17~27，本会落进"左箭头"热区，所以抢在它前面拦下来。
+  // 阈值取 margin + 13 = 28，卡在图标右缘和左箭头左缘（29）之间。
+  if (baseClick) {
+    widget.onClick = function (opts) {
+      const event = opts?.e;
+      const node = opts?.node;
+      if (event && node) {
+        const localX = Number(event.canvasX) - Number(node.pos?.[0] ?? 0);
+        if (localX >= marginOf() - 4 && localX < marginOf() + LOCK_HIT_DX) {
+          // 吃掉这次点击，清掉时间戳，免得和随后的点击拼成双击把节点拖起来
+          if (opts.canvas) opts.canvas.last_mouseclick = 0;
+          refreshing = true;
+          app.graph?.setDirtyCanvas(true, true);
+          // reload 可能是 async，也可能因防重入直接返回；两种情况都兜住，
+          // 结束（或立即返回）后把图标恢复成常态色。
+          Promise.resolve(reload?.()).finally(() => {
+            refreshing = false;
+            app.graph?.setDirtyCanvas(true, true);
+          });
+          return;
+        }
+      }
+      return baseClick.apply(this, arguments);
+    };
+  }
+
+  // --- 图标：后置画在左端 ----------------------------------------------
+  widget.drawWidget = function (ctx, opts) {
+    baseDraw.call(this, ctx, opts);
+    if (!ctx || typeof ctx.roundRect !== "function") return;
+    // 极窄/hideText 时原生只画一个纯色条，没有箭头也没有文字 ——
+    // 这时候再叠刷新图标只会挤成一个小疙瘩，跳过。
+    if (opts?.showText === false) return;
+
+    const height = Number(this.height) || 0;
+    if (!(height > 0)) return;
+
+    const margin = marginOf();
+    // 刷新中用青色高亮，平时用主题正文色（深浅主题下都不缺对比度）
+    const color = refreshing ? folderAccent(false).stroke : this.text_color;
+
+    drawRefreshGlyph(
+      ctx,
+      margin + LOCK_ICON_DX,
+      this.y + height * 0.5,
+      // 控件矮时按比例缩，最高不超过标称尺寸
+      Math.min(height * 0.62, LOCK_ICON_SIZE),
       color,
     );
   };
@@ -668,6 +853,11 @@ app.registerExtension({
         }
       };
       this._folderFilterReload = reloadFromServer;
+
+      // 给【图像】控件左端装刷新图标。reloadFromServer 已定义，传进去，
+      // 点图标即重建候选列表 —— 不用再翻右键菜单，也不用重启 ComfyUI。
+      // 新加的图片、新建的目录，点一下当场就能在下拉里看到。
+      styleImageWidget(imageWidget, reloadFromServer);
 
       /**
        * 当前值不在已知集合里 —— 典型场景是用上传按钮传了张新图。

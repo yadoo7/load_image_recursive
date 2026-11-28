@@ -296,6 +296,17 @@ node in the ecosystem does the same thing.
 
 ## Changelog
 
+### 1.0.9
+
+* **Refresh button on the `image` widget.** A refresh glyph is drawn at the
+  left end of the `image` dropdown. Clicking it re-fetches the candidate list
+  from the backend and rebuilds the dropdown in place, so newly added images
+  or folders appear immediately — no ComfyUI restart required. The glyph is
+  drawn as a canvas path (no emoji), turns teal while refreshing, and the
+  left arrow is shifted right to make room, matching the `folder` widget's
+  padlock layout. The existing right-click "⟳ Refresh image list" item and
+  the automatic refresh paths (extension hook, upload callback) are unchanged.
+
 ### 1.0.8
 
 * Packaging fix only. Version 1.0.7 was flagged by the registry's static
@@ -464,6 +475,14 @@ middleware 分流表、`/lir/` 路由、以及 `INPUT_TYPES` / `VALIDATE_INPUTS`
 * `clipspace/` 会被跳过（那是 MaskEditor 的临时目录）
 
 **更新记录**
+
+**1.0.9**
+
+* 新增：「图像」控件左端内嵌刷新图标。点一下即向后端重新拉取候选列表并就地重建下拉，
+  新加的图片、新建的目录当场就能看到，**无需重启 ComfyUI**。图标用 canvas path 绘制
+  （不用 emoji，避免截断切碎代理对），刷新时转青色高亮；左箭头右移腾位，与「目录」
+  控件的锁图标布局一致。原有的右键「⟳ 刷新图片列表」和自动刷新路径（扩展钩子、
+  上传回调）保持不变。
 
 **1.0.8**
 
